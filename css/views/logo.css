@@ -1,0 +1,62 @@
+/* Logo-Editor (Hallencup) */
+
+.logo-view .logo-stage {
+  min-height: 260px;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+.logo-view .logo-stage img {
+  width: auto; height: auto;
+  max-width: 100%;
+  max-height: min(56vh, 460px);
+  box-shadow: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .18));
+  transition: opacity .15s;
+}
+.logo-view .logo-stage img[hidden] { display: none; }
+.logo-view .logo-stage.is-busy img { opacity: .55; }
+
+.logo-loading {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  color: var(--muted); font-weight: 600; text-align: center; padding: 16px;
+}
+.logo-loading[hidden] { display: none; }
+.logo-spinner {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 4px solid #d9e8cc; border-top-color: var(--green);
+  animation: logo-spin .8s linear infinite;
+}
+@keyframes logo-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .logo-spinner { animation: none; } }
+
+.logo-view .card h2 { margin-bottom: 12px; }
+.logo-view .row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.logo-view .row.row-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.logo-view .row > .field { min-width: 0; }
+.logo-view input { min-width: 0; }
+.logo-view input[type="date"] { min-height: 46px; display: block; }
+
+.logo-hint { margin: -6px 0 14px; font-size: 14px; color: var(--muted); }
+.logo-hint strong { color: var(--green-dark); font-weight: 700; }
+
+/* Größere Touch-Ziele für Chips und Schalter */
+.logo-view .chip { min-height: 44px; padding: 8px 16px; font-size: 15px; }
+.logo-view .chips + .label, .logo-view .chips + .field { margin-top: 14px; }
+.logo-view .check { min-height: 44px; font-weight: 600; cursor: pointer; }
+.logo-view .check input { width: 24px; height: 24px; flex: none; }
+
+.logo-swatch {
+  display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15);
+}
+.logo-swatch.is-gruen { background: linear-gradient(135deg, #76cc30, #33691e); }
+.logo-swatch.is-silber { background: linear-gradient(135deg, #f2f2f2, #8c8c8c); }
+
+.logo-export-opts[hidden] { display: none; }
+.logo-export-info { font-size: 14px; color: var(--muted); margin: 10px 0 14px; }
+.logo-view .btn-row > .btn { flex: 1 1 150px; }
+
+.logo-reset { margin-top: 6px; }
+.logo-view .logo-reset { min-height: 44px; }
+.logo-hint-inline { display: block; margin: -2px 0 6px; font-size: 14px; color: var(--muted); }

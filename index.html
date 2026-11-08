@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SV Liegau Media</title>
+  <meta name="description" content="Social-Media-Werkzeuge des SV Liegau-Augustusbad 1951 e.V.">
+  <meta name="theme-color" content="#3e9800">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SV Media">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand" aria-label="Startseite">
+      <img src="assets/sv-logo.svg" alt="" width="36" height="36">
+      <span class="brand-text"><strong>SV Liegau</strong><small>Media</small></span>
+    </a>
+    <span class="topbar-title" id="view-title"></span>
+  </header>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="Hauptnavigation">
+    <a href="#/" data-route="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Start</span></a>
+    <a href="#/logo" data-route="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 3h4v4l3 3-3 3v4h-4l-3 3-3-3H5v-4l-3-3 3-3V5h4z"/></svg><span>Logo</span></a>
+    <a href="#/create" data-route="create"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l5-5 4 4 3-3 4 4" fill="none" stroke-width="2" stroke-linejoin="round"/></svg><span>Erstellen</span></a>
+    <a href="#/archive" data-route="archive"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v4H3z M5 8h14v12H5z M10 12h4" fill="none" stroke-width="2" stroke-linejoin="round"/></svg><span>Archiv</span></a>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "SV Liegau Media",
+  "short_name": "SV Media",
+  "description": "Social-Media-Werkzeuge des SV Liegau-Augustusbad 1951 e.V.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#3e9800",
+  "background_color": "#f1f1f1",
+  "lang": "de",
+  "dir": "ltr",
+  "categories": ["sports", "social", "photo"],
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Beitrag erstellen", "url": "./#/create", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Logo", "url": "./#/logo", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Archiv", "url": "./#/archive", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
