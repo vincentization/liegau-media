@@ -1,7 +1,9 @@
 // Logo-Tab: Hallencup-Logo für die nächste Ausgabe anpassen und exportieren.
 import { html, esc, toast, useStyles, canvasToBlob, shareOrDownload, slug, loadImage } from '../util.js';
 import { setHallencupLogoSvg } from '../brand.js';
-import { buildHallencupSvg, loadLogoResources, formatDateRange, bannerText, normalizeOptions, DEFAULTS } from '../hallencup-logo.js';
+import { buildHallencupSvg, buildHallencupLayers, loadLogoResources, formatDateRange, bannerText, normalizeOptions, DEFAULTS } from '../hallencup-logo.js';
+import { VARIANTS, FORMATS, BACKGROUNDS, prepareScene, drawFrame, recordAnimation } from '../logo/animate.js';
+import { canRecordVideo, willProduceMp4 } from '../create/export.js';
 
 export const title = 'Hallencup-Logo';
 
@@ -18,6 +20,9 @@ const DEFAULT_SETTINGS = Object.freeze({
   exportFormat: 'png', // 'png' | 'svg'
   exportSize: 1000,    // 500 | 1000 | 2000
   exportBg: 'transparent', // 'transparent' | 'white'
+  animVariant: 'mid',      // 'lame' | 'mid' | 'exciting'
+  animFormat: 'square',    // 'square' | 'story'
+  animBg: 'gruen',         // 'gruen' | 'weiss' | 'dunkel'
 });
 const SIZES = [500, 1000, 2000];
 
@@ -162,6 +167,44 @@ export async function mount(el) {
           <button type="button" class="btn btn-secondary" data-action="archive" disabled>Ins Archiv</button>
         </div>
       </section>
+
+      <section class="card logo-anim">
+        <p class="eyebrow">Schritt 5</p>
+        <h2>Als Video animieren</h2>
+        <div class="stage logo-anim-stage">
+          <canvas class="logo-anim-canvas" aria-label="Vorschau der Logo-Animation"></canvas>
+          <button type="button" class="logo-anim-replay" data-action="anim-replay" aria-label="Animation neu starten">↻</button>
+        </div>
+        <span class="label" id="lbl-anim" style="margin-top:14px">Animation</span>
+        <div class="chips" role="group" aria-labelledby="lbl-anim">
+          ${Object.entries(VARIANTS).map(([k, v]) => chip('animVariant', k, v.label)).join('')}
+        </div>
+        <p class="logo-hint-inline" data-anim-hint style="margin-top:8px"></p>
+        <span class="label" id="lbl-animfmt" style="margin-top:14px">Format</span>
+        <div class="chips" role="group" aria-labelledby="lbl-animfmt">
+          ${Object.entries(FORMATS).map(([k, v]) => chip('animFormat', k, v.label)).join('')}
+        </div>
+        <span class="label" id="lbl-animbg" style="margin-top:14px">Hintergrund</span>
+        <div class="chips" role="group" aria-labelledby="lbl-animbg">
+          ${Object.entries(BACKGROUNDS).map(([k, v]) => chip('animBg', k, v.label)).join('')}
+        </div>
+        <div class="logo-anim-progress" data-anim-progress hidden>
+          <div class="progress"><div></div></div>
+          <p class="logo-export-info">Video wird aufgenommen … bitte die App geöffnet lassen.</p>
+          <button type="button" class="btn btn-ghost btn-sm" data-action="anim-cancel">Abbrechen</button>
+        </div>
+        <div class="btn-row" style="margin-top:16px" data-anim-actions>
+          <button type="button" class="btn" data-action="anim-record">Video erstellen</button>
+        </div>
+        <div class="logo-anim-result" data-anim-result hidden>
+          <video playsinline muted loop autoplay controls></video>
+          <p class="logo-export-info" data-anim-info></p>
+          <div class="btn-row">
+            <button type="button" class="btn" data-action="anim-share">Teilen / Speichern</button>
+            <button type="button" class="btn btn-secondary" data-action="anim-archive">Ins Archiv</button>
+          </div>
+        </div>
+      </section>
     </div>
   `;
   el.append(root);
@@ -178,6 +221,7 @@ export async function mount(el) {
   const btnArchive = $('[data-action="archive"]');
   const inputs = ['edition', 'title', 'subtitle', 'dateFrom', 'dateTo', 'dateFree'].map(n => root.querySelector(`[name="${n}"]`));
   const starsInput = $('[name="stars"]');
+  const animHint = $('[data-anim-hint]');
 
   // Plus/Minus neben der Ausgabe: Wert ändern und wie eine Eingabe behandeln.
   const editionInput = $('[name="edition"]');
@@ -202,6 +246,7 @@ export async function mount(el) {
       c.setAttribute('aria-pressed', String(String(s[c.dataset.group]) === c.dataset.value));
     });
     pngOnly.hidden = s.exportFormat !== 'png';
+    animHint.textContent = VARIANTS[s.animVariant]?.hint || '';
     updateDatePreview();
     updateExportInfo();
   }
@@ -265,6 +310,7 @@ export async function mount(el) {
       stage.classList.remove('is-busy');
       updateExportInfo();
       setBusy(busy);
+      anim.invalidate();
       // Für den Beitrags-Generator bereitstellen (gedrosselt, Silber-SVG ist groß)
       clearTimeout(publishTimer);
       publishTimer = setTimeout(() => setHallencupLogoSvg(svg), 500);
@@ -297,6 +343,8 @@ export async function mount(el) {
       syncForm();
       persist();
       if (g === 'variant') scheduleRender(0);
+      if (g === 'animFormat' || g === 'animBg') anim.invalidate(0);
+      if (g.startsWith('anim')) anim.restart();
       return;
     }
     const action = e.target.closest('[data-action]')?.dataset.action;
@@ -311,6 +359,8 @@ export async function mount(el) {
       await doExport('share');
     } else if (action === 'archive') {
       await doExport('archive');
+    } else if (action?.startsWith('anim-')) {
+      await anim.action(action.slice(5));
     }
   });
 
@@ -372,6 +422,144 @@ export async function mount(el) {
     }
   }
 
+  // ---- Animation (Schritt 5)
+  const anim = (() => {
+    const canvas = $('.logo-anim-canvas');
+    const ctx = canvas.getContext('2d');
+    const progressBox = $('[data-anim-progress]');
+    const progressBar = progressBox.querySelector('.progress > div');
+    const actions = $('[data-anim-actions]');
+    const btnRecord = $('[data-action="anim-record"]');
+    const resultBox = $('[data-anim-result]');
+    const video = resultBox.querySelector('video');
+    const info = $('[data-anim-info]');
+    let scene = null, sceneKey = '', building = null, timer = 0, raf = 0;
+    let start = performance.now(), visible = true, recording = false, cancel = false;
+    let result = null; // { blob, thumb, mime, url, filename, label, width, height, variant }
+
+    if (!canRecordVideo()) {
+      btnRecord.disabled = true;
+      btnRecord.textContent = 'Video wird von diesem Browser nicht unterstützt';
+    }
+
+    const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => { visible = es.some(e => e.isIntersecting); }) : null;
+    io?.observe(canvas);
+
+    async function build() {
+      if (!currentOpts || !resources) return;
+      const F = FORMATS[s.animFormat] || FORMATS.square;
+      const key = JSON.stringify([currentOpts, s.animFormat, s.animBg]);
+      if (key === sceneKey && scene) return;
+      const data = buildHallencupLayers(currentOpts, resources);
+      const next = await prepareScene(data, { W: F.W, H: F.H, bg: s.animBg, scale: 0.4 });
+      if (!alive) return;
+      scene = next; sceneKey = key;
+      canvas.width = scene.W; canvas.height = scene.H;
+      canvas.style.aspectRatio = `${F.W} / ${F.H}`;
+      canvas.classList.toggle('is-story', F.H > F.W);
+      start = performance.now();
+    }
+
+    function invalidate(delay = 300) {
+      clearTimeout(timer);
+      timer = setTimeout(() => { building = build().catch(err => console.error(err)); }, delay);
+      clearResult();
+    }
+
+    function loop() {
+      raf = requestAnimationFrame(loop);
+      if (!scene || !visible || document.hidden) return;
+      const V = VARIANTS[s.animVariant] || VARIANTS.mid;
+      const t = ((performance.now() - start) / 1000) % (V.duration + 1.2);
+      drawFrame(ctx, scene, s.animVariant, Math.min(t, V.duration));
+    }
+    raf = requestAnimationFrame(loop);
+
+    function clearResult() {
+      if (result?.url) URL.revokeObjectURL(result.url);
+      result = null;
+      video.removeAttribute('src'); video.load();
+      resultBox.hidden = true;
+    }
+
+    function setRecording(on) {
+      recording = on;
+      progressBox.hidden = !on;
+      actions.hidden = on;
+      setBusy(on);
+      root.querySelectorAll('.logo-anim .chip').forEach(c => { c.disabled = on; });
+    }
+
+    async function record() {
+      if (recording) return;
+      if (renderTimer) { clearTimeout(renderTimer); renderTimer = 0; await render(); }
+      if (!currentOpts) return;
+      clearResult();
+      cancel = false;
+      setRecording(true);
+      progressBar.style.width = '0%';
+      const F = FORMATS[s.animFormat] || FORMATS.square;
+      const variant = s.animVariant, opts = currentOpts;
+      try {
+        const full = await prepareScene(buildHallencupLayers(opts, resources), { W: F.W, H: F.H, bg: s.animBg });
+        const out = await recordAnimation(full, variant, {
+          onProgress: p => { progressBar.style.width = `${Math.round(p * 100)}%`; },
+          isCancelled: () => cancel || !alive,
+        });
+        if (!alive) return;
+        const ext = out.mime.includes('mp4') ? 'mp4' : 'webm';
+        const year = (opts.dateText.match(/(\d{4})(?!.*\d{4})/) || [])[1] || '';
+        const base = slug(['hallencup', opts.edition, year, 'animation', variant, s.animFormat === 'story' ? 'story' : ''].filter(Boolean).join(' '));
+        result = {
+          ...out, url: URL.createObjectURL(out.blob), filename: `${base}.${ext}`, variant,
+          width: F.W, height: F.H, label: `${bannerText(opts)} – Animation „${variant}“`,
+          formatLabel: `Logo-Animation „${variant}“ (${F.W}×${F.H})`,
+        };
+        video.src = result.url;
+        video.play().catch(() => {});
+        info.textContent = `${ext.toUpperCase()} · ${F.W}×${F.H} · ${(out.blob.size / 1024 / 1024).toFixed(1)} MB`
+          + (ext === 'webm' ? ' – Hinweis: WhatsApp/Instagram bevorzugen MP4 (Safari/iPhone oder aktuelles Chrome erzeugen MP4).' : '');
+        resultBox.hidden = false;
+        resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (err) {
+        if (err?.name !== 'AbortError') { console.error(err); toast(err?.message || 'Video konnte nicht erstellt werden', { error: true, ms: 4000 }); }
+      } finally {
+        if (alive) setRecording(false);
+      }
+    }
+
+    async function action(name) {
+      if (name === 'replay') { start = performance.now(); return; }
+      if (name === 'record') return record();
+      if (name === 'cancel') { cancel = true; return; }
+      if (!result) return;
+      if (name === 'share') {
+        const r = await shareOrDownload(result.blob, result.filename, { title: result.label });
+        if (r === 'shared') toast('Geteilt');
+        else if (r === 'downloaded') toast(`Gespeichert: ${result.filename}`);
+      } else if (name === 'archive') {
+        try {
+          const { saveItem } = await import('../storage.js');
+          await saveItem({
+            kind: 'video', format: 'logo-anim', formatLabel: result.formatLabel, title: result.label,
+            mime: result.mime, width: result.width, height: result.height, size: result.blob.size,
+            blob: result.blob, thumb: result.thumb, meta: { ...s, dateText: currentOpts?.dateText },
+          });
+          toast('Im Archiv gespeichert');
+        } catch (err) {
+          console.error(err);
+          toast(`Archiv: ${err?.message || 'Speichern fehlgeschlagen'}`, { error: true, ms: 4000 });
+        }
+      }
+    }
+
+    return {
+      invalidate, action,
+      restart: () => { start = performance.now(); },
+      destroy: () => { cancel = true; cancelAnimationFrame(raf); clearTimeout(timer); io?.disconnect(); clearResult(); },
+    };
+  })();
+
   syncForm();
   setBusy(false);
   render();
@@ -382,6 +570,7 @@ export async function mount(el) {
     if (saveTimer) { clearTimeout(saveTimer); saveSettings(s); }
     if (publishTimer && currentSvg) { clearTimeout(publishTimer); setHallencupLogoSvg(currentSvg); }
     if (blobUrl) URL.revokeObjectURL(blobUrl);
+    anim.destroy();
   };
 }
 

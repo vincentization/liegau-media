@@ -319,38 +319,81 @@ function titleTag(o) {
   return `<title>${t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</title>`;
 }
 
+/**
+ * Logo in einzelne Ebenen zerlegt (für Animationen).
+ * Jede Ebene ist eine vollständige SVG mit derselben viewBox wie das Logo.
+ * Reihenfolge = Zeichenreihenfolge.
+ * @returns {{ box: number[], layers: { id: string, svg: string }[] }}
+ */
+export function buildHallencupLayers(options, res) {
+  const o = normalizeOptions(options);
+  const { bold, semibold } = res.fonts;
+  if (o.variant === 'silber' && !res.silber) throw new Error('Silber-Grafik nicht geladen');
+  const { box, open, head, parts } = o.variant === 'silber'
+    ? silberParts(o, bold, semibold, res.silber)
+    : gruenParts(o, bold, semibold);
+  const layers = [];
+  for (const { id, markup } of parts) {
+    if (!markup) continue;
+    const prev = layers[layers.length - 1];
+    if (prev && prev.id === id) prev.markup += markup; // gleiche Ebene zusammenfassen
+    else layers.push({ id, markup });
+  }
+  return { box, layers: layers.map(l => ({ id: l.id, svg: `${open}${head}${l.markup}</svg>` })) };
+}
+
+function joinParts({ open, head, parts }, o) {
+  return [open, titleTag(o), head, ...parts.map(p => p.markup), '</svg>'].join('');
+}
+
 function buildGruen(o, bold, semibold) {
+  return joinParts(gruenParts(o, bold, semibold), o);
+}
+
+function buildSilber(o, bold, semibold, S) {
+  return joinParts(silberParts(o, bold, semibold, S), o);
+}
+
+function gruenParts(o, bold, semibold) {
   const L = LAYOUT.gruen;
   const tall = !!o.subtitle;
   const V = tall ? L.tall : L.short;
-  const parts = [svgOpen(V.box), titleTag(o), GRUEN.ring, tall ? GRUEN.badgeTall : GRUEN.badgeShort, GRUEN.emblem];
+  const parts = [
+    { id: 'badge', markup: GRUEN.ring },
+    { id: 'badge', markup: tall ? GRUEN.badgeTall : GRUEN.badgeShort },
+    { id: 'emblem', markup: GRUEN.emblem },
+  ];
 
   // Schleife + Datum
   const ribbon = V.ribbonDy ? `<g transform="translate(0 ${V.ribbonDy})">${GRUEN.ribbon}</g>` : GRUEN.ribbon;
-  parts.push(ribbon, datePath(o, semibold, L.date, shiftCurve(0, V.ribbonDy)));
+  parts.push({ id: 'ribbon', markup: ribbon }, { id: 'date', markup: datePath(o, semibold, L.date, shiftCurve(0, V.ribbonDy)) });
 
   // Banner
-  parts.push(GRUEN.bannerShadow, GRUEN.banner, bannerPath(o, bold, L.banner));
+  parts.push({ id: 'banner', markup: GRUEN.bannerShadow + GRUEN.banner }, { id: 'bannerText', markup: bannerPath(o, bold, L.banner) });
 
   // Zusatzzeile + Sterne
   if (tall) {
     const line = fitLine(bold, o.subtitle, TYPE.subGruen.size, TYPE.subGruen.tracking, 290);
     // Ohne Sterne: Zeile mittig zwischen Banner und Schleife
     const baseline = o.stars ? 477.2 : 489.5;
-    parts.push(`<path d="${straightText(line, 296.59, baseline)}" style="fill: ${L.color};"/>`);
-    if (o.stars) parts.push(`<g>${[-30.13, 0, 30.13].map(dx => star(296.88 + dx, 496.74, 9.14, L.color)).join('')}</g>`);
+    parts.push({ id: 'subtitle', markup: `<path d="${straightText(line, 296.59, baseline)}" style="fill: ${L.color};"/>` });
+    if (o.stars) [-30.13, 0, 30.13].forEach((dx, i) => parts.push({ id: `star${i}`, markup: star(296.88 + dx, 496.74, 9.14, L.color) }));
   } else if (o.stars) {
-    parts.push(...[-41.2, 0, 41.2].map(dx => star(300.88 + dx, 469.38, 12.5, L.color)));
+    [-41.2, 0, 41.2].forEach((dx, i) => parts.push({ id: `star${i}`, markup: star(300.88 + dx, 469.38, 12.5, L.color) }));
   }
-  parts.push('</svg>');
-  return parts.join('');
+  return { box: V.box, open: svgOpen(V.box), head: '', parts };
 }
 
-function buildSilber(o, bold, semibold, S) {
+function silberParts(o, bold, semibold, S) {
   const L = LAYOUT.silber;
-  const parts = [svgOpen(L.box, ' xmlns:xlink="http://www.w3.org/1999/xlink"'), titleTag(o), S.defs, S.ring, S.badge, S.badgeBevel, S.emblem];
-  parts.push(S.ribbon, datePath(o, semibold, L.date, shiftCurve(L.dx, 5.82)));
-  parts.push(S.bannerShadow, S.banner, bannerPath(o, bold, L.banner));
+  const parts = [
+    { id: 'badge', markup: S.ring + S.badge + S.badgeBevel },
+    { id: 'emblem', markup: S.emblem },
+    { id: 'ribbon', markup: S.ribbon },
+    { id: 'date', markup: datePath(o, semibold, L.date, shiftCurve(L.dx, 5.82)) },
+    { id: 'banner', markup: S.bannerShadow + S.banner },
+    { id: 'bannerText', markup: bannerPath(o, bold, L.banner) },
+  ];
 
   const sub = L.sub;
   if (o.subtitle) {
@@ -359,15 +402,15 @@ function buildSilber(o, bold, semibold, S) {
     // Bei kleinerer Schrift Grundlinie so verschieben, dass die Versalhöhe mittig bleibt
     const capMid = sub.baseline - 0.68 * TYPE.subSilber.size / 2;
     const baseline = capMid + 0.68 * line.size / 2;
-    parts.push(`<path d="${straightText(line, sub.cx, baseline)}" style="fill: ${sub.fill};"/>`);
+    parts.push({ id: 'subtitle', markup: `<path d="${straightText(line, sub.cx, baseline)}" style="fill: ${sub.fill};"/>` });
     if (o.stars) {
       const half = line.width / 2, gap = 16.5, r = 9.14, step = 24.03;
-      const xs = [half + gap + r, half + gap + r + step];
-      parts.push(`<g>${xs.flatMap(x => [star(sub.cx - x, capMid, r, sub.starFill), star(sub.cx + x, capMid, r, sub.starFill)]).join('')}</g>`);
+      const xs = [half + gap + r + step, half + gap + r];
+      // von außen links nach außen rechts
+      [-xs[0], -xs[1], xs[1], xs[0]].forEach((dx, i) => parts.push({ id: `star${i}`, markup: star(sub.cx + dx, capMid, r, sub.starFill) }));
     }
   } else if (o.stars) {
-    parts.push(`<g>${[-41.2, 0, 41.2].map(dx => star(sub.cx + dx, 464.5, 12.5, sub.starFill)).join('')}</g>`);
+    [-41.2, 0, 41.2].forEach((dx, i) => parts.push({ id: `star${i}`, markup: star(sub.cx + dx, 464.5, 12.5, sub.starFill) }));
   }
-  parts.push('</svg>');
-  return parts.join('');
+  return { box: L.box, open: svgOpen(L.box, ' xmlns:xlink="http://www.w3.org/1999/xlink"'), head: S.defs, parts };
 }

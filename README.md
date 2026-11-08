@@ -6,7 +6,7 @@ Kleine Web-App (PWA) für die Social-Media-Arbeit des **SV Liegau-Augustusbad 19
 
 ## Was die App kann
 
-- **Logo** – Hallencup-Logo anpassen und als PNG/SVG exportieren.
+- **Logo** – Hallencup-Logo anpassen und als PNG/SVG exportieren – oder als Video animieren (Varianten „lame“, „mid“, „exciting“; Quadrat oder Story).
 - **Erstellen** – Beiträge im Vereinsdesign für Instagram (Post/Story), WhatsApp-Status und Facebook erzeugen.
 - **Archiv** – alle gespeicherten Bilder, Videos und Logos ansehen, teilen, herunterladen oder löschen.
 - Funktioniert offline und lässt sich wie eine normale App installieren.
@@ -64,4 +64,6 @@ Ohne Anmeldung (oder offline) speichert die App weiterhin lokal auf dem Gerät. 
 ## Lizenzen
 
 - Schrift **Titillium Web** (Accademia di Belle Arti di Urbino) – SIL Open Font License 1.1, siehe [`fonts/OFL.txt`](fonts/OFL.txt).
+- [opentype.js](https://github.com/opentypejs/opentype.js) (`vendor/opentype.min.js`) – MIT License.
+- [mp4-muxer](https://github.com/Vanilagy/mp4-muxer) (`vendor/mp4-muxer.min.js`) – MIT License.
 - Vereinslogo und Vereinsname: SV Liegau-Augustusbad 1951 e.V.

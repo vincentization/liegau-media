@@ -79,3 +79,24 @@
 .stepper-btn:first-child { border-radius: var(--radius) 0 0 var(--radius); }
 .stepper-btn:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
 .stepper-btn:active { filter: brightness(.9); }
+
+/* Schritt 5: Logo-Animation */
+.logo-anim-stage { position: relative; padding: 10px; }
+.logo-anim-stage canvas.logo-anim-canvas {
+  display: block; width: 100%; height: auto; max-height: 56vh; max-width: 100%;
+  margin: 0 auto; object-fit: contain; border-radius: 2px;
+}
+.logo-anim-stage .logo-anim-canvas.is-story { width: auto; height: 56vh; }
+.logo-anim-replay {
+  position: absolute; right: 16px; bottom: 16px; width: 44px; height: 44px;
+  display: grid; place-items: center; padding: 0;
+  font: 700 22px/1 var(--font); color: #fff; background: rgba(31, 45, 17, .7);
+  border: 0; border-radius: 50%; cursor: pointer;
+}
+.logo-anim-progress { margin-top: 16px; }
+.logo-anim-progress .logo-export-info { margin: 8px 0; }
+.logo-anim-progress[hidden], .logo-anim-result[hidden], [data-anim-actions][hidden] { display: none; }
+.logo-anim-result { margin-top: 16px; }
+.logo-anim-result video {
+  display: block; width: 100%; max-height: 60vh; background: #111; border-radius: var(--radius);
+}

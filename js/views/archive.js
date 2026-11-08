@@ -17,7 +17,7 @@ const FILTERS = [
 
 const SHORT = {
   'ig-story': 'IG Story', 'ig-post': 'IG Post', 'ig-square': 'IG Quadrat', 'ig-reel': 'IG Reel', 'wa-status': 'WA Status',
-  'fb-post': 'FB Post', 'fb-story': 'FB Story', 'logo-png': 'Logo PNG', 'logo-svg': 'Logo SVG',
+  'fb-post': 'FB Post', 'fb-story': 'FB Story', 'logo-png': 'Logo PNG', 'logo-svg': 'Logo SVG', 'logo-anim': 'Logo Video',
 };
 const badgeFor = i => SHORT[i.format] || (i.formatLabel || i.format || '').replace(/\s*\(.*\)\s*$/, '') || i.kind;
 
