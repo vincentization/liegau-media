@@ -95,10 +95,14 @@ export async function mount(el) {
       <section class="card">
         <p class="eyebrow">Schritt 1</p>
         <h2>Text im Banner</h2>
-        <div class="row">
-          <label class="field"><span>Ausgabe</span>
-            <input type="number" name="edition" inputmode="numeric" min="1" max="999" placeholder="25" autocomplete="off">
-          </label>
+        <div class="row row-edition">
+          <div class="field"><span id="logo-edition-label">Ausgabe</span>
+            <div class="stepper">
+              <button type="button" class="stepper-btn" data-step="-1" aria-label="Ausgabe verringern">−</button>
+              <input type="number" name="edition" inputmode="numeric" min="1" max="999" placeholder="25" autocomplete="off" aria-labelledby="logo-edition-label">
+              <button type="button" class="stepper-btn" data-step="1" aria-label="Ausgabe erhöhen">+</button>
+            </div>
+          </div>
           <label class="field"><span>Titel</span>
             <input type="text" name="title" placeholder="HALLENCUP" autocomplete="off" autocapitalize="characters" maxlength="40">
           </label>
@@ -174,6 +178,14 @@ export async function mount(el) {
   const btnArchive = $('[data-action="archive"]');
   const inputs = ['edition', 'title', 'subtitle', 'dateFrom', 'dateTo', 'dateFree'].map(n => root.querySelector(`[name="${n}"]`));
   const starsInput = $('[name="stars"]');
+
+  // Plus/Minus neben der Ausgabe: Wert ändern und wie eine Eingabe behandeln.
+  const editionInput = $('[name="edition"]');
+  root.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', () => {
+    const current = parseInt(editionInput.value, 10) || DEFAULTS.edition;
+    editionInput.value = String(Math.min(999, Math.max(1, current + Number(btn.dataset.step))));
+    editionInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }));
 
   let alive = true;
   let currentSvg = null;
