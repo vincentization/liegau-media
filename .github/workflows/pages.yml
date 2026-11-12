@@ -1,11 +1,21 @@
 # Veröffentlicht die App bei jedem Push auf main über GitHub Pages.
 # Einmalig nötig: Repository → Settings → Pages → Source: „GitHub Actions“.
+#
+# Vor jeder Veröffentlichung werden die Spielergebnisse von fussball.de geladen
+# (tools/fetch-results.mjs → data/results.json + data/logos/). Damit die Ergebnisse
+# aktuell sind, läuft der Workflow zusätzlich zeitgesteuert – am Wochenende und
+# Montag häufiger. Sofort aktualisieren: Actions → GitHub Pages → Run workflow.
 name: GitHub Pages
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # Zeiten in UTC (deutsche Zeit = UTC+1 im Winter, UTC+2 im Sommer)
+    - cron: '20 4 * * 2-5'          # Di–Fr: einmal morgens
+    - cron: '20 11-21/2 * * 6,0'    # Sa+So: alle 2 Stunden ab Mittag
+    - cron: '50 5-20 * * 1'         # Montag: stündlich (Post-Tag)
 
 permissions:
   contents: read
@@ -24,6 +34,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Ergebnisse von fussball.de laden
+        run: node tools/fetch-results.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

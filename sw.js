@@ -8,6 +8,7 @@
 //    deshalb NICHT in einer Liste nachgetragen werden.
 //  • Seitenaufrufe: erst Netz, offline Fallback auf index.html.
 //  • Lokale Entwicklung (localhost/127.0.0.1): immer erst Netz → keine veralteten Dateien.
+//  • data/results.json (Spielergebnisse): immer erst Netz, offline aus dem Cache.
 //  • Fremde Server (Supabase-API, Anmeldung, Uploads) werden nie gecacht – einzige
 //    Ausnahme: das versionierte supabase-js-Modul vom CDN.
 //
@@ -76,6 +77,12 @@ self.addEventListener('fetch', event => {
 
   if (req.mode === 'navigate') {
     event.respondWith(networkFirst(req, 'index.html'));
+    return;
+  }
+
+  // Spielergebnisse ändern sich laufend → immer erst frisch laden, offline aus dem Cache.
+  if (url.pathname.endsWith('/data/results.json')) {
+    event.respondWith(networkFirst(req));
     return;
   }
 
