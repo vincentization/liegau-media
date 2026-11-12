@@ -49,6 +49,62 @@ render();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW nicht registriert', err));
+    // updateViaCache: 'none' → sw.js wird nie aus dem HTTP-Cache geprüft.
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(err => console.warn('SW nicht registriert', err));
+  });
+}
+
+// ---------- Aktualisieren-Button (oben rechts) ----------
+// Holt den neuesten veröffentlichten Stand – auch in der vom Homescreen gestarteten App:
+//  1. Service Worker auf neue Version prüfen (und ggf. sofort aktivieren),
+//  2. alle gecachten App-Dateien am HTTP-Cache vorbei neu laden (sw.js → 'refresh'),
+//  3. Seite neu laden.
+// Offline bleibt der alte Cache unangetastet, die App funktioniert also weiter.
+
+const refreshBtn = document.getElementById('app-refresh');
+refreshBtn.addEventListener('click', refreshApp);
+
+async function refreshApp() {
+  if (refreshBtn.disabled) return;
+  refreshBtn.disabled = true;
+  refreshBtn.classList.add('is-busy');
+  try {
+    if (navigator.onLine === false) throw new Error('offline');
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    if (reg) {
+      await reg.update();                       // wirft, wenn sw.js nicht erreichbar ist
+      await waitUntilActive(reg.installing || reg.waiting);
+      const sw = reg.active;
+      const result = sw && await askWorker(sw, { type: 'refresh' }, 20000);
+      if (result && !result.ok) throw new Error('offline');
+    }
+    location.reload();
+  } catch (err) {
+    console.warn('Aktualisieren fehlgeschlagen', err);
+    const { toast } = await import('./util.js');
+    toast('Keine Verbindung – bitte später erneut versuchen.', { error: true });
+    refreshBtn.disabled = false;
+    refreshBtn.classList.remove('is-busy');
+  }
+}
+
+/** Wartet, bis ein neu installierter Service Worker aktiv ist (max. 10 s). */
+function waitUntilActive(worker) {
+  if (!worker || worker.state === 'activated') return Promise.resolve();
+  return new Promise(resolve => {
+    const t = setTimeout(resolve, 10000);
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'activated' || worker.state === 'redundant') { clearTimeout(t); resolve(); }
+    });
+  });
+}
+
+/** Schickt dem Service Worker eine Nachricht und wartet auf die Antwort (null bei Zeitüberschreitung). */
+function askWorker(worker, message, ms) {
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    const t = setTimeout(() => resolve(null), ms);
+    channel.port1.onmessage = e => { clearTimeout(t); resolve(e.data); };
+    worker.postMessage(message, [channel.port2]);
   });
 }

@@ -58,6 +58,19 @@ a { color: var(--green); }
 .brand-text strong { font-size: 16px; font-weight: 700; color: var(--green-dark); }
 .brand-text small { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .topbar-title { margin-left: auto; font-weight: 700; font-style: italic; color: var(--green); font-size: 17px; }
+.topbar-refresh {
+  flex: none; display: grid; place-items: center;
+  width: 40px; height: 40px; margin-right: -8px; padding: 0;
+  background: transparent; border: 0; border-radius: 50%; cursor: pointer;
+  color: var(--green); -webkit-tap-highlight-color: transparent;
+}
+.topbar-refresh svg { width: 22px; height: 22px; stroke: currentColor; }
+.topbar-refresh:hover, .topbar-refresh:focus-visible { background: #f3faec; }
+.topbar-refresh:focus-visible { outline: 2px solid var(--green); outline-offset: 0; }
+.topbar-refresh:disabled { cursor: progress; }
+.topbar-refresh.is-busy svg { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .topbar-refresh.is-busy svg { animation-duration: 2.4s; } }
 
 /* ---------- View ---------- */
 .view {

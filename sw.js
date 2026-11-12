@@ -9,6 +9,8 @@
 //  • Seitenaufrufe: erst Netz, offline Fallback auf index.html.
 //  • Lokale Entwicklung (localhost/127.0.0.1): immer erst Netz → keine veralteten Dateien.
 //  • data/results.json (Spielergebnisse): immer erst Netz, offline aus dem Cache.
+//  • Aktualisieren-Button (Nachricht 'refresh'): alle gecachten eigenen Dateien
+//    werden am HTTP-Cache vorbei neu geladen, danach lädt die Seite neu.
 //  • Fremde Server (Supabase-API, Anmeldung, Uploads) werden nie gecacht – einzige
 //    Ausnahme: das versionierte supabase-js-Modul vom CDN.
 //
@@ -88,6 +90,37 @@ self.addEventListener('fetch', event => {
 
   event.respondWith(IS_DEV ? networkFirst(req) : staleWhileRevalidate(req, event));
 });
+
+// Aktualisieren-Button der App: alle gecachten eigenen Dateien am HTTP-Cache vorbei
+// neu laden. Fehlschläge (offline) lassen den alten Eintrag stehen.
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'refresh') return;
+  const port = event.ports[0];
+  event.waitUntil(refreshAll().then(
+    result => port?.postMessage(result),
+    err => port?.postMessage({ ok: false, error: String(err) }),
+  ));
+});
+
+async function refreshAll() {
+  const cache = await caches.open(CACHE);
+  const urls = new Set(CORE.map(u => new URL(u, self.registration.scope).href));
+  for (const req of await cache.keys()) {
+    if (new URL(req.url).origin === self.location.origin) urls.add(req.url);
+  }
+  let updated = 0, failed = 0;
+  await Promise.all([...urls].map(async url => {
+    try {
+      const res = await fetch(url, { cache: 'reload' });
+      if (res.ok) { await cache.put(url, res); updated++; }
+      else if (res.status === 404) await cache.delete(url);
+      else failed++;
+    } catch {
+      failed++;
+    }
+  }));
+  return { ok: updated > 0 || failed === 0, updated, failed };
+}
 
 async function put(req, res) {
   if (res && res.ok && (res.type === 'basic' || res.type === 'cors')) {
