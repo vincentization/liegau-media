@@ -1,5 +1,6 @@
-// Ergebnis-Beiträge: Ergebnisse aller Mannschaften für einen Zeitraum (fussball.de)
-// als Übersicht in drei Layouts – oder ein einzelnes Spiel als Highlight mit Text.
+// Ergebnis- und Vorschau-Beiträge: Ergebnisse aller Mannschaften für einen Zeitraum – oder die
+// kommenden Spiele (Anstoß, Ort) – von fussball.de, als Übersicht in drei Layouts oder ein
+// einzelnes Spiel als Highlight mit Text.
 import { toast, html, esc, slug, loadImage, useStyles, shareOrDownload, downloadBlob, openSheet, formatBytes } from '../util.js';
 import { ensureFonts } from '../brand.js';
 import { saveItem } from '../storage.js';
@@ -7,24 +8,38 @@ import { loadLogo } from '../create/logos.js';
 import { exportImage } from '../create/export.js';
 import {
   loadResults, mergeMatches, getEdits, setEdit, saveManual, deleteManual, newManualMatch,
-  lastWeekend, lastDays, inRange, dateLabel, scoreText, isPlayed, outcome, OUTCOME_LABEL, teamLabel,
-  shortDate, weekday, logoUrl, isoDate,
+  lastWeekend, lastDays, comingWeekend, nextDays, inRange, dateLabel, scoreText, isPlayed, outcome, OUTCOME_LABEL, teamLabel,
+  shortDate, weekday, logoUrl, isoDate, upcomingMatches, kickoffText, isCancelled, venueShort,
 } from '../results/data.js';
 import { LAYOUTS, RESULT_FORMATS, drawResults, defaultHeadline } from '../results/render.js';
 
 export const title = 'Ergebnisse';
 
 const STORE_KEY = 'svl.results.settings';
-const SEL_KEY = 'svl.results.selection'; // { excluded:[id], included:[id], highlights:[id] }
+const SEL_KEY = 'svl.results.selection'; // { excluded:[id], included:[id], highlights:[id] } – je Art eigener Schlüssel
 const FOOTER_DEFAULT = 'Unsere Jugend ist unsere Zukunft!';
+// Art des Beitrags: Ergebnisse (zurückliegend) oder Vorschau (kommende Spiele)
+const KINDS = {
+  results: { title: 'Ergebnisse', periods: { weekend: 'Letztes Wochenende', week: 'Letzte 7 Tage', custom: 'Eigener' }, textHint: 'z. B. Starke Leistung unserer B-Jugend – drei Tore in der ersten Halbzeit!' },
+  preview: { title: 'Spieltag', periods: { weekend: 'Kommendes Wochenende', week: 'Nächste 7 Tage', custom: 'Eigener' }, textHint: 'z. B. Kommt vorbei und unterstützt unsere D-Jugend im Spitzenspiel!' },
+};
 const CLUB_PAGE = 'https://www.fussball.de/verein/sv-liegau-augustusbad-sachsen/-/id/00ES8GNBRC00007UVV0AG08LVUPGND5I';
 const DEFAULTS = {
+  kind: 'results',
   period: 'weekend', from: '', to: '',
   mode: 'overview', layout: 'paper', format: 'post',
   title: 'Ergebnisse', footer: FOOTER_DEFAULT,
+  // Vorschau: eigene Werte (p…)
+  pPeriod: 'weekend', pFrom: '', pTo: '',
+  pTitle: KINDS.preview.title, pFooter: 'Kommt vorbei und feuert uns an!',
 };
 
 let S = null;
+
+const isPv = () => S.settings.kind === 'preview';
+/** Einstellung der aktuellen Art: 'title' → 'title' bzw. 'pTitle'. */
+const K = k => (isPv() ? 'p' + k[0].toUpperCase() + k.slice(1) : k);
+const selKey = kind => (kind === 'preview' ? SEL_KEY + '.preview' : SEL_KEY);
 
 const readJson = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fb; } catch { return fb; } };
 const writeJson = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* */ } };
@@ -38,12 +53,16 @@ const ICON_SAVE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12
 function template(st) {
   return html`
 <div class="rs">
+  <div class="rs-mode rs-kind" role="tablist" aria-label="Beitragsart">
+    <button type="button" role="tab" data-kind="results">Ergebnisse</button>
+    <button type="button" role="tab" data-kind="preview">Vorschau</button>
+  </div>
   <div class="card">
     <div class="rs-step"><span>1</span><h2>Zeitraum</h2></div>
     <div class="rs-seg" role="group" aria-label="Zeitraum">
-      <button type="button" class="chip" data-period="weekend">Letztes Wochenende</button>
-      <button type="button" class="chip" data-period="week">Letzte 7 Tage</button>
-      <button type="button" class="chip" data-period="custom">Eigener</button>
+      <button type="button" class="chip" data-period="weekend"></button>
+      <button type="button" class="chip" data-period="week"></button>
+      <button type="button" class="chip" data-period="custom"></button>
     </div>
     <div class="row rs-custom" hidden>
       <label class="field"><span>Von</span><input type="date" data-in="from"></label>
@@ -55,7 +74,7 @@ function template(st) {
 
   <div class="card">
     <div class="rs-step"><span>2</span><h2>Spiele</h2><span class="rs-count small muted" data-out="count"></span></div>
-    <p class="small muted rs-help">Haken = kommt ins Bild. <b class="rs-star-inline">${ICON_STAR}</b> = hervorheben. Stift = Ergebnis korrigieren.</p>
+    <p class="small muted rs-help">Haken = kommt ins Bild. <b class="rs-star-inline">${ICON_STAR}</b> = hervorheben. Stift = Spiel bearbeiten.</p>
     <ul class="rs-list" data-out="list"></ul>
     <button type="button" class="btn btn-ghost btn-block btn-sm" data-act="add">+ Spiel manuell hinzufügen</button>
   </div>
@@ -73,15 +92,15 @@ function template(st) {
         ${LAYOUTS.map(l => `<button type="button" class="rs-layout" data-layout="${l.id}" aria-pressed="false"><canvas width="216" height="270"></canvas><b>${esc(l.label)}</b><small>${esc(l.hint)}</small></button>`).join('')}
       </div>
       <div class="row">
-        <label class="field"><span>Überschrift</span><input type="text" data-in="title" maxlength="24" value="${esc(st.title)}" autocomplete="off"></label>
-        <label class="field"><span>Fußzeile</span><input type="text" data-in="footer" maxlength="60" value="${esc(st.footer)}" placeholder="leer = keine" autocomplete="off"></label>
+        <label class="field"><span>Überschrift</span><input type="text" data-in="title" maxlength="24" autocomplete="off"></label>
+        <label class="field"><span>Fußzeile</span><input type="text" data-in="footer" maxlength="60" placeholder="leer = keine" autocomplete="off"></label>
       </div>
     </div>
 
     <div data-when="highlight" hidden>
       <label class="field"><span>Spiel</span><select data-in="hlMatch"></select></label>
       <label class="field"><span>Überschrift</span><input type="text" data-in="hlHeadline" maxlength="28" autocomplete="off"></label>
-      <label class="field"><span>Kurzer Text <b class="rs-chars" data-out="chars"></b></span><textarea data-in="hlText" rows="3" maxlength="240" placeholder="z. B. Starke Leistung unserer B-Jugend – drei Tore in der ersten Halbzeit!"></textarea></label>
+      <label class="field"><span>Kurzer Text <b class="rs-chars" data-out="chars"></b></span><textarea data-in="hlText" rows="3" maxlength="240"></textarea></label>
       <span class="label">Foto (optional)</span>
       <div class="rs-photo">
         <button type="button" class="btn btn-ghost btn-sm" data-act="photo">Foto wählen</button>
@@ -111,15 +130,13 @@ export async function mount(el) {
   useStyles('css/views/create.css'); // Slider-Stile
   useStyles('css/views/results.css');
   const settings = { ...DEFAULTS, ...readJson(STORE_KEY, {}) };
-  const sel = readJson(SEL_KEY, {});
   const root = template(settings);
   S = {
     root, settings,
-    excluded: new Set(sel.excluded || []),
-    included: new Set(sel.included || []),
-    highlights: new Set(sel.highlights || []),
+    excluded: new Set(), included: new Set(), highlights: new Set(),
     data: { generatedAt: null, error: null, matches: [] },
     all: [],
+    upcoming: [],
     hl: { matchId: '', headline: '', text: '', photo: null, photoY: 0, photoUrl: null },
     images: { club: null, logos: new Map() },
     loading: new Set(),
@@ -127,6 +144,7 @@ export async function mount(el) {
     urls: new Set(),
     raf: 0,
   };
+  loadSelection();
   el.append(root);
   S.$ = s => root.querySelector(s);
   S.canvas = S.$('.rs-canvas');
@@ -153,22 +171,36 @@ export function unmount() {
 
 // ---------- Zustand ----------
 function saveSettings() { writeJson(STORE_KEY, S.settings); }
-function saveSelection() { writeJson(SEL_KEY, { excluded: [...S.excluded], included: [...S.included], highlights: [...S.highlights] }); }
-
-function period() {
-  const st = S.settings;
-  if (st.period === 'week') return lastDays(7);
-  if (st.period === 'custom' && st.from && st.to) return st.from <= st.to ? { from: st.from, to: st.to } : { from: st.to, to: st.from };
-  return lastWeekend();
+function saveSelection() { writeJson(selKey(S.settings.kind), { excluded: [...S.excluded], included: [...S.included], highlights: [...S.highlights] }); }
+function loadSelection() {
+  const sel = readJson(selKey(S.settings.kind), {});
+  S.excluded = new Set(sel.excluded || []);
+  S.included = new Set(sel.included || []);
+  S.highlights = new Set(sel.highlights || []);
 }
 
-/** Spiele im Zeitraum. Standard: mit Ergebnis = ausgewählt, ohne = abgewählt. */
-function periodMatches() { return S.all.filter(m => inRange(m, period())); }
-const isSelected = m => (isPlayed(m) ? !S.excluded.has(m.id) : S.included.has(m.id));
+const defaultPeriod = () => (isPv() ? comingWeekend() : lastWeekend());
+function period() {
+  const st = S.settings;
+  const kind = st[K('period')], from = st[K('from')], to = st[K('to')];
+  if (kind === 'week') return isPv() ? nextDays(7) : lastDays(7);
+  if (kind === 'custom' && from && to) return from <= to ? { from, to } : { from: to, to: from };
+  return defaultPeriod();
+}
+
+/** Ergebnisse: alle Spiele. Vorschau: nur anstehende, verlegte am neuen Termin. */
+const baseList = () => (isPv() ? S.upcoming : S.all);
+function periodMatches() { return baseList().filter(m => inRange(m, period())); }
+/** Standard: Ergebnisse → Spiele mit Ergebnis ausgewählt; Vorschau → alle außer abgesetzten. */
+const defaultOn = m => (isPv() ? !isCancelled(m) : isPlayed(m));
+const isSelected = m => (defaultOn(m) ? !S.excluded.has(m.id) : S.included.has(m.id));
 function selectedMatches() { return periodMatches().filter(isSelected); }
+/** Ergebnis bzw. Anstoß für Liste und Auswahl. */
+const midText = m => (isPv() ? kickoffText(m) : scoreText(m));
 
 function refresh() {
   S.all = mergeMatches(S.data.matches);
+  S.upcoming = upcomingMatches(S.all);
   renderStatus();
   renderList();
   renderHlSelect();
@@ -179,13 +211,23 @@ function refresh() {
 // ---------- UI-Sync ----------
 function syncControls() {
   const st = S.settings, $ = S.$;
-  S.root.querySelectorAll('[data-period]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.period === st.period)));
-  $('.rs-custom').hidden = st.period !== 'custom';
-  if (st.period === 'custom') {
+  const kind = KINDS[st.kind] || KINDS.results;
+  S.root.querySelectorAll('[data-kind]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.kind === st.kind)));
+  S.root.querySelectorAll('[data-period]').forEach(b => {
+    b.textContent = kind.periods[b.dataset.period];
+    b.setAttribute('aria-pressed', String(b.dataset.period === st[K('period')]));
+  });
+  $('.rs-custom').hidden = st[K('period')] !== 'custom';
+  if (st[K('period')] === 'custom') {
     const p = period();
-    $('[data-in="from"]').value = st.from || p.from;
-    $('[data-in="to"]').value = st.to || p.to;
+    $('[data-in="from"]').value = st[K('from')] || p.from;
+    $('[data-in="to"]').value = st[K('to')] || p.to;
   }
+  const title = $('[data-in="title"]'), footer = $('[data-in="footer"]');
+  if (document.activeElement !== title) title.value = st[K('title')];
+  if (document.activeElement !== footer) footer.value = st[K('footer')];
+  title.placeholder = kind.title;
+  $('[data-in="hlText"]').placeholder = kind.textHint;
   S.root.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === st.mode)));
   S.root.querySelectorAll('[data-when]').forEach(n => { n.hidden = n.dataset.when !== st.mode; });
   S.root.querySelectorAll('[data-layout]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.layout === st.layout)));
@@ -193,7 +235,7 @@ function syncControls() {
   const p = period();
   const fmt = d => `${weekday(d)} ${shortDate(d)}`;
   $('[data-out="range"]').textContent = `${fmt(p.from)} bis ${fmt(p.to)}`;
-  $('.rs-go').textContent = st.mode === 'highlight' ? 'Highlight-Bild erstellen' : 'Bild erstellen';
+  $('.rs-go').textContent = st.mode === 'highlight' ? (isPv() ? 'Ankündigung erstellen' : 'Highlight-Bild erstellen') : 'Bild erstellen';
 }
 
 function renderStatus() {
@@ -208,17 +250,20 @@ function renderStatus() {
 
 function matchRow(m) {
   const sel = isSelected(m), star = S.highlights.has(m.id);
-  const played = isPlayed(m);
-  const oc = outcome(m);
-  const sc = scoreText(m) || 'offen';
+  const pv = isPv();
+  const played = pv ? !isCancelled(m) && !!m.time : isPlayed(m);
+  const oc = pv ? null : outcome(m);
+  const sc = midText(m) || 'offen';
+  const place = pv ? venueShort(m) : '';
   return `
   <li class="rs-item${sel ? ' is-on' : ''}${star ? ' is-star' : ''}" data-id="${esc(m.id)}">
     <label class="rs-check"><input type="checkbox" data-op="toggle"${sel ? ' checked' : ''} aria-label="Ins Bild übernehmen"></label>
     <div class="rs-body">
-      <span class="rs-meta">${esc(weekday(m.date))} ${esc(shortDate(m.date))}${m.time ? ' · ' + esc(m.time) : ''} · <b>${esc(teamLabel(m))}</b>${m.competition ? ' · ' + esc(m.competition) : ''}${m.edited ? ' · <i>korrigiert</i>' : ''}${m.manual ? ' · <i>manuell</i>' : ''}</span>
+      <span class="rs-meta">${esc(weekday(m.date))} ${esc(shortDate(m.date))}${m.time ? ' · ' + esc(m.time) : ''} · <b>${esc(teamLabel(m))}</b>${m.competition ? ' · ' + esc(m.competition) : ''}${m.movedFrom ? ' · <i>verlegt vom ' + esc(shortDate(m.movedFrom)) + '</i>' : ''}${m.edited ? ' · <i>korrigiert</i>' : ''}${m.manual ? ' · <i>manuell</i>' : ''}</span>
       <span class="rs-teams"><span class="${m.home.own ? 'own' : ''}">${esc(m.home.name)}</span> – <span class="${m.away.own ? 'own' : ''}">${esc(m.away.name || '?')}</span></span>
+      ${place ? `<span class="rs-venue">${esc(place)}</span>` : ''}
     </div>
-    <span class="rs-score${played ? '' : ' is-open'}${oc ? ' is-' + oc : ''}" title="${oc ? OUTCOME_LABEL[oc] : ''}">${esc(sc)}</span>
+    <span class="rs-score${played ? '' : ' is-open'}${pv && played ? ' is-time' : ''}${oc ? ' is-' + oc : ''}" title="${oc ? OUTCOME_LABEL[oc] : pv && played ? 'Anstoß' : ''}">${esc(sc)}</span>
     <button type="button" class="rs-icon rs-star" data-op="star" aria-pressed="${star}" aria-label="Hervorheben">${ICON_STAR}</button>
     <button type="button" class="rs-icon" data-op="edit" aria-label="Bearbeiten">${ICON_EDIT}</button>
   </li>`;
@@ -227,29 +272,34 @@ function matchRow(m) {
 function renderList() {
   const list = periodMatches();
   const box = S.$('[data-out="list"]');
-  box.innerHTML = list.length ? list.map(matchRow).join('') : `<li class="rs-empty small muted">${S.data.error ? 'Keine Daten.' : 'Keine Spiele in diesem Zeitraum.'}</li>`;
+  box.innerHTML = list.length ? list.map(matchRow).join('') : `<li class="rs-empty small muted">${S.data.error ? 'Keine Daten.' : isPv() ? 'Keine anstehenden Spiele in diesem Zeitraum.' : 'Keine Spiele in diesem Zeitraum.'}</li>`;
   const n = selectedMatches().length;
   S.$('[data-out="count"]').textContent = list.length ? `${n} von ${list.length} im Bild` : '';
 }
 
 function renderHlSelect() {
   const sel = S.$('[data-in="hlMatch"]');
-  const list = periodMatches().filter(isPlayed);
+  const pv = isPv();
+  const list = periodMatches().filter(pv ? m => !isCancelled(m) : isPlayed);
   if (!list.some(m => m.id === S.hl.matchId)) {
-    S.hl.matchId = (list.find(m => S.highlights.has(m.id)) || list.find(m => outcome(m) === 'win') || list[0])?.id || '';
+    const nice = pv ? m => m.home.own && !m.away.own : m => outcome(m) === 'win';
+    S.hl.matchId = (list.find(m => S.highlights.has(m.id)) || list.find(nice) || list[0])?.id || '';
     S.hl.headline = '';
   }
+  const opt = m => pv
+    ? `${weekday(m.date)} ${shortDate(m.date)} ${m.time || ''} · ${teamLabel(m)}: ${m.home.name} – ${m.away.name}`
+    : `${teamLabel(m)}: ${m.home.name} – ${m.away.name} ${scoreText(m)}`;
   sel.innerHTML = list.length
-    ? list.map(m => `<option value="${esc(m.id)}"${m.id === S.hl.matchId ? ' selected' : ''}>${S.highlights.has(m.id) ? '★ ' : ''}${esc(teamLabel(m))}: ${esc(m.home.name)} – ${esc(m.away.name)} ${esc(scoreText(m))}</option>`).join('')
-    : '<option value="">Keine Spiele mit Ergebnis im Zeitraum</option>';
+    ? list.map(m => `<option value="${esc(m.id)}"${m.id === S.hl.matchId ? ' selected' : ''}>${S.highlights.has(m.id) ? '★ ' : ''}${esc(opt(m))}</option>`).join('')
+    : `<option value="">${pv ? 'Keine anstehenden Spiele im Zeitraum' : 'Keine Spiele mit Ergebnis im Zeitraum'}</option>`;
   const hm = hlMatch();
   const head = S.$('[data-in="hlHeadline"]');
-  head.placeholder = defaultHeadline(hm) || 'Überschrift';
+  head.placeholder = defaultHeadline(hm, S.settings.kind) || 'Überschrift';
   head.value = S.hl.headline;
   S.$('[data-in="hlText"]').value = S.hl.text;
   updateChars();
 }
-const hlMatch = () => S.all.find(m => m.id === S.hl.matchId) || null;
+const hlMatch = () => baseList().find(m => m.id === S.hl.matchId) || null;
 function updateChars() { S.$('[data-out="chars"]').textContent = `${S.hl.text.length}/240`; }
 
 // ---------- Logos ----------
@@ -268,13 +318,13 @@ function sceneFor(fmt, layout = S.settings.mode === 'highlight' ? 'highlight' : 
   const matches = selectedMatches();
   const st = S.settings;
   return {
-    layout, W: fmt.w, H: fmt.h, story: fmt.story,
+    kind: st.kind, layout, W: fmt.w, H: fmt.h, story: fmt.story,
     matches, highlights: S.highlights,
-    title: st.title.trim() || 'Ergebnisse',
+    title: st[K('title')].trim() || KINDS[st.kind].title,
     dateText: dateLabel(matches),
-    footer: st.footer.trim(),
+    footer: st[K('footer')].trim(),
     images: S.images,
-    hl: { match: hlMatch(), headline: S.hl.headline.trim() || defaultHeadline(hlMatch()), text: S.hl.text.trim(), photo: S.hl.photo, photoY: S.hl.photoY },
+    hl: { match: hlMatch(), headline: S.hl.headline.trim() || defaultHeadline(hlMatch(), st.kind), text: S.hl.text.trim(), photo: S.hl.photo, photoY: S.hl.photoY },
   };
 }
 const currentFormat = () => RESULT_FORMATS.find(f => f.id === S.settings.format) || RESULT_FORMATS[0];
@@ -318,9 +368,17 @@ function bind() {
   root.addEventListener('click', e => {
     const t = e.target.closest('button, input[type="checkbox"]');
     if (!t) return;
+    if (t.dataset.kind) {
+      if (t.dataset.kind === st.kind) return;
+      st.kind = t.dataset.kind;
+      loadSelection();
+      S.hl.matchId = ''; S.hl.headline = '';
+      saveSettings(); syncControls(); renderList(); renderHlSelect(); loadTeamLogos(); redraw();
+      return;
+    }
     if (t.dataset.period) {
-      st.period = t.dataset.period;
-      if (st.period === 'custom' && !st.from) { const p = lastWeekend(); st.from = p.from; st.to = p.to; }
+      st[K('period')] = t.dataset.period;
+      if (t.dataset.period === 'custom' && !st[K('from')]) { const p = defaultPeriod(); st[K('from')] = p.from; st[K('to')] = p.to; }
       saveSettings(); syncControls(); renderList(); renderHlSelect(); loadTeamLogos(); redraw();
       return;
     }
@@ -330,25 +388,25 @@ function bind() {
     const op = t.dataset.op;
     if (op) {
       const id = t.closest('[data-id]')?.dataset.id;
-      const m = S.all.find(x => x.id === id);
+      const m = baseList().find(x => x.id === id);
       if (!m) return;
       if (op === 'toggle') {
         const on = t.checked;
-        if (isPlayed(m)) { if (on) S.excluded.delete(id); else S.excluded.add(id); }
+        if (defaultOn(m)) { if (on) S.excluded.delete(id); else S.excluded.add(id); }
         else { if (on) S.included.add(id); else S.included.delete(id); }
       } else if (op === 'star') {
         if (S.highlights.has(id)) S.highlights.delete(id);
         else {
           S.highlights.add(id);
           // Hervorgehobenes Spiel gehört ins Bild
-          if (isPlayed(m)) S.excluded.delete(id); else S.included.add(id);
+          if (defaultOn(m)) S.excluded.delete(id); else S.included.add(id);
         }
       } else if (op === 'edit') { editMatch(m); return; }
       saveSelection(); renderList(); renderHlSelect(); redraw();
       return;
     }
     const act = t.dataset.act;
-    if (act === 'add') editMatch(newManualMatch(period().to), true);
+    if (act === 'add') editMatch(newManualMatch(isPv() ? period().from : period().to), true);
     else if (act === 'photo') S.$('.rs-file').click();
     else if (act === 'nophoto') setPhoto(null);
     else if (act === 'export') doExport();
@@ -359,10 +417,10 @@ function bind() {
     const k = e.target.dataset.in;
     if (!k) return;
     const v = e.target.value;
-    if (k === 'title' || k === 'footer') { st[k] = v; saveSettings(); }
+    if (k === 'title' || k === 'footer') { st[K(k)] = v; saveSettings(); }
     else if (k === 'from' || k === 'to') {
       if (!v) return;
-      st[k] = v; saveSettings(); syncControls(); renderList(); renderHlSelect(); loadTeamLogos();
+      st[K(k)] = v; saveSettings(); syncControls(); renderList(); renderHlSelect(); loadTeamLogos();
     }
     else if (k === 'hlMatch') { S.hl.matchId = v; S.hl.headline = ''; renderHlSelect(); }
     else if (k === 'hlHeadline') S.hl.headline = v;
@@ -401,6 +459,9 @@ function editMatch(m, isNew = false) {
     <form class="rs-edit">
       <div class="row">
         <label class="field"><span>Datum</span><input type="date" name="date" value="${esc(m.date)}" required></label>
+        <label class="field"><span>Anstoß</span><input type="time" name="time" value="${esc(m.time || '')}"></label>
+      </div>
+      <div class="row">
         <label class="field"><span>Altersklasse</span><input type="text" name="ageGroup" value="${esc(m.ageGroup)}" placeholder="z. B. D-Junioren" list="rs-ages"></label>
       </div>
       <datalist id="rs-ages">${['Herren', 'Alte Herren', 'A-Junioren', 'B-Junioren', 'C-Junioren', 'D-Junioren', 'E-Junioren', 'F-Junioren', 'G-Junioren', 'Frauen'].map(a => `<option value="${a}">`).join('')}</datalist>
@@ -432,6 +493,7 @@ function editMatch(m, isNew = false) {
     const score = h !== '' && a !== '' ? [Math.max(0, +h), Math.max(0, +a)] : null;
     const patch = {
       date: f.get('date') || m.date,
+      time: String(f.get('time') || ''),
       ageGroup: String(f.get('ageGroup') || '').trim(),
       competition: String(f.get('competition') || '').trim(),
       home: { name: String(f.get('home')).trim(), own: ownSide === 'home' },
@@ -445,7 +507,7 @@ function editMatch(m, isNew = false) {
     } else {
       setEdit(m.id, patch);
     }
-    if (isNew && score) S.excluded.delete(m.id);
+    if (isNew && (score || isPv())) S.excluded.delete(m.id);
     saveSelection();
     dlg.close();
     refresh();
@@ -473,9 +535,14 @@ async function doExport() {
     const out = await exportImage(fmt.w, fmt.h, ctx => drawResults(ctx, scene));
     if (!S) return;
     const m = hlMatch();
-    const name = isHl ? `highlight_${teamLabel(m)}_${m.date}` : `ergebnisse_${scene.dateText || isoDate(new Date())}_${st.layout}`;
+    const pv = isPv();
+    const name = isHl
+      ? `${pv ? 'ankuendigung' : 'highlight'}_${teamLabel(m)}_${m.date}`
+      : `${pv ? 'vorschau' : 'ergebnisse'}_${scene.dateText || isoDate(new Date())}_${st.layout}`;
     const filename = `sv-liegau_${slug(name)}_${fmt.id}.jpg`;
-    const titleText = isHl ? `Highlight: ${teamLabel(m)} ${scoreText(m)}` : `Ergebnisse ${scene.dateText}`;
+    const titleText = isHl
+      ? (pv ? `Ankündigung: ${teamLabel(m)} ${weekday(m.date)} ${shortDate(m.date)} ${m.time || ''}`.trim() : `Highlight: ${teamLabel(m)} ${scoreText(m)}`)
+      : `${pv ? 'Vorschau' : 'Ergebnisse'} ${scene.dateText}`;
     const url = URL.createObjectURL(out.blob); S.urls.add(url);
     S.results.unshift({ ...out, fmt, filename, url, title: titleText });
     renderResults();
@@ -484,7 +551,7 @@ async function doExport() {
       await saveItem({
         kind: 'image', format: fmt.formatId, formatLabel: fmt.formatLabel, title: titleText,
         mime: out.mime, width: fmt.w, height: fmt.h, size: out.blob.size, blob: out.blob, thumb: out.thumb,
-        meta: { results: { mode: st.mode, layout: st.layout, matches: scene.matches.map(x => x.id), highlights: [...S.highlights] } },
+        meta: { results: { kind: st.kind, mode: st.mode, layout: st.layout, matches: scene.matches.map(x => x.id), highlights: [...S.highlights] } },
       });
     } catch (e) { console.warn('Archiv:', e); archived = false; }
     toast(archived ? 'Bild erstellt und im Archiv gespeichert' : 'Bild erstellt (Archiv nicht verfügbar)');

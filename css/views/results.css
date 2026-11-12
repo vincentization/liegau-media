@@ -40,6 +40,8 @@
 .rs-score { min-width: 48px; text-align: center; font-weight: 700; font-size: 17px; color: var(--green-ink); padding: 2px 6px; border-radius: 3px; background: #eef3e8; }
 .rs-score.is-win { background: var(--green); color: #fff; }
 .rs-score.is-loss { background: #6b6b6b; color: #fff; }
+.rs-score.is-time { background: var(--green-ink); color: #fff; font-size: 15px; }
+.rs-venue { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rs-score.is-open { font-weight: 400; font-size: 13px; color: var(--muted); background: transparent; }
 .rs-icon { display: grid; place-items: center; width: 40px; height: 44px; border: 0; background: none; cursor: pointer; color: var(--muted); border-radius: var(--radius); }
 .rs-icon svg { width: 22px; height: 22px; }
@@ -56,6 +58,9 @@
 }
 .rs-mode button svg { width: 18px; height: 18px; fill: currentColor; }
 .rs-mode button[aria-selected="true"] { background: var(--green); color: #fff; }
+/* Beitragsart (Ergebnisse / Vorschau) ganz oben */
+.rs-kind { margin-bottom: 16px; background: #fff; box-shadow: var(--shadow); }
+.rs-kind button { min-height: 50px; font-size: 16px; }
 
 /* Layout-Auswahl mit echten Mini-Vorschauen */
 .rs-layouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }

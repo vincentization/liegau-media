@@ -5,7 +5,7 @@
 // Browser (kein CORS). Deshalb läuft dieses Skript im GitHub-Pages-Workflow
 // (.github/workflows/pages.yml) vor jeder Veröffentlichung – und lokal mit:
 //
-//   node tools/fetch-results.mjs            # Standard: letzte 120 Tage bis +14 Tage
+//   node tools/fetch-results.mjs            # Standard: letzte 120 Tage bis +21 Tage
 //   node tools/fetch-results.mjs 2026-08-01 2026-11-30
 //
 // Die Ergebnisse sind auf fussball.de per Web-Schrift verschleiert: Jede Ziffer
@@ -147,8 +147,10 @@ async function parseMatches(html) {
       const info = scoreCell.match(/class="info-text">([^<]*)/);
       if (info) status = text(info[1]); // „o.E.“, „Absetzung“, „Nichtantritt GAST“, neuer Termin …
     }
+    // Spielort (dank show-venues): „Kunstrasenplatz, SpA Liegau-Aug. Kunstrasen, Zum Sportplatz 14, 01454 Radeberg“
+    const venue = text(block.match(/<tr class="[^"]*row-venue[^"]*">[\s\S]*?<td colspan="3">([\s\S]*?)<\/td>/)?.[1]);
     matches.push({
-      id, date, time, ageGroup, competition,
+      id, date, time, ageGroup, competition, venue,
       home: { name: home.name, logo: home.logoId, own: home.own },
       away: { name: away.name, logo: away.logoId, own: away.own },
       score, status, note,
@@ -205,7 +207,7 @@ async function downloadLogos(matches) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const now = new Date();
   const from = process.argv[2] || iso(addDays(now, -120));
-  const to = process.argv[3] || iso(addDays(now, 14));
+  const to = process.argv[3] || iso(addDays(now, 21)); // +21 Tage für Vorschau-Beiträge
   const out = new URL('data/results.json', ROOT);
   await mkdir(new URL('data/', ROOT), { recursive: true });
   try {

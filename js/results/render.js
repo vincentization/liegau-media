@@ -1,7 +1,8 @@
 // Zeichnet Ergebnis-Beiträge auf ein Canvas (Ausgabe-Pixel).
 // Layouts: 'paper' (Klassik), 'board' (Anzeigetafel), 'tiles' (Kacheln), 'highlight' (einzelnes Spiel).
+// scene.kind: 'results' (Ergebnisse) oder 'preview' (kommende Spiele: Anstoßzeit statt Ergebnis).
 import { COLORS, FONT } from '../brand.js';
-import { scoreText, outcome, OUTCOME_LABEL, sides, teamLabel, shortDate, weekday, parseIso } from './data.js';
+import { scoreText, kickoffText, isCancelled, venueShort, outcome, OUTCOME_LABEL, sides, teamLabel, shortDate, weekday, parseIso } from './data.js';
 
 export const LAYOUTS = [
   { id: 'paper', label: 'Klassik', hint: 'Weißes Blatt auf Grün' },
@@ -20,6 +21,9 @@ const CAP = 0.69;
 const INK = COLORS.ink;
 const LOSS = '#5a5a5a';
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const isPreview = scene => scene.kind === 'preview';
+/** Mittlere Spalte: Ergebnis – oder in der Vorschau die Anstoßzeit. */
+const centerText = (scene, m) => (isPreview(scene) ? kickoffText(m) : scoreText(m));
 
 // ---------- Text-Helfer ----------
 const font = (w, size, italic = false) => `${italic ? 'italic ' : ''}${w} ${size.toFixed(1)}px "${FONT}", Helvetica, Arial, sans-serif`;
@@ -247,8 +251,8 @@ function drawPaperCard(ctx, scene, m, x, y, w, h, u, hl) {
   ctx.textAlign = 'right';
   setFont(ctx, 400, 16 * u, { track: 0.05 }); ctx.fillStyle = sub;
   const midY = rowsTop + rowGap;
-  ctx.fillText(shortDate(m.date), sx, midY - 18 * u);
-  const sc = scoreText(m);
+  ctx.fillText(isPreview(scene) ? `${weekday(m.date)} ${shortDate(m.date)}` : shortDate(m.date), sx, midY - 18 * u);
+  const sc = centerText(scene, m);
   const big = /^\d+:\d+$/.test(sc);
   ctx.fillStyle = hl ? '#fff' : '#3a3a3a';
   const size = fitSize(ctx, sc, 900, (big ? 38 : 26) * u, scoreW - 4 * u, { track: big ? 0.02 : 0 });
@@ -373,7 +377,7 @@ function drawBoardRow(ctx, scene, m, x, y, w, h, compact, hl) {
     ctx.fillStyle = oc === 'win' ? COLORS.greenLight : oc === 'draw' ? '#b9b9b9' : '#7d7d7d';
     slantRect(ctx, bx, by + boxH - boxH * 0.08, boxW, boxH * 0.08); ctx.fill();
   }
-  const sc = scoreText(m), big = /^\d+:\d+$/.test(sc);
+  const sc = centerText(scene, m), big = /^\d+:\d+$/.test(sc);
   ctx.fillStyle = hl ? COLORS.greenLight : '#fff'; ctx.textAlign = 'center';
   const ss = fitSize(ctx, sc, 700, boxH * (big ? (compact ? 0.5 : 0.62) : 0.32), boxW - boxH * 0.3, { track: big ? 0.02 : 0 });
   ctx.fillText(sc, bx + boxW / 2 + boxH * SLANT / 2, by + boxH / 2 + ss * CAP / 2);
@@ -498,20 +502,25 @@ function drawTile(ctx, scene, m, x, y, w, h, hl) {
   slantRect(ctx, x + pad - 6 * u, y + pad - 4 * u, lw, lh); ctx.fill();
   ctx.fillStyle = hl ? COLORS.green : '#fff';
   ctx.fillText(ellipsize(ctx, label, lw - 26 * u), x + pad + 8 * u + lh * SLANT / 2, y + pad - 4 * u + lh / 2 + 25 * u * CAP / 2);
-  // Ausgang
-  if (oc) {
+  // Ausgang – in der Vorschau Heim/Auswärts (Heimspiel gefüllt)
+  const pv = isPreview(scene);
+  const badge = pv
+    ? (isCancelled(m) ? { t: 'ABGESETZT', fill: false, c: LOSS } : { t: sd.home ? 'HEIM' : 'AUSWÄRTS', fill: sd.home, c: COLORS.green })
+    : oc ? { t: OUTCOME_LABEL[oc].toUpperCase(), fill: oc === 'win', c: oc === 'win' ? COLORS.green : oc === 'draw' ? '#9a9a9a' : LOSS } : null;
+  if (badge) {
     setFont(ctx, 700, 18 * u, { track: 0.1 });
-    const t = OUTCOME_LABEL[oc].toUpperCase();
-    const tw = ctx.measureText(t).width + 22 * u;
-    const bc = hl ? '#fff' : oc === 'win' ? COLORS.green : oc === 'draw' ? '#9a9a9a' : LOSS;
+    const tw = ctx.measureText(badge.t).width + 22 * u;
+    const bc = hl ? '#fff' : badge.c;
     ctx.strokeStyle = bc; ctx.lineWidth = 2.5 * u; ctx.fillStyle = bc;
     roundRect(ctx, x + w - pad - tw, y + pad, tw, 32 * u, 16 * u);
-    if (oc === 'win') { ctx.fill(); ctx.fillStyle = hl ? COLORS.green : '#fff'; } else ctx.stroke();
-    ctx.textAlign = 'center'; ctx.fillText(t, x + w - pad - tw / 2, y + pad + 16 * u + 18 * u * CAP / 2); ctx.textAlign = 'left';
+    if (badge.fill) { ctx.fill(); ctx.fillStyle = hl ? COLORS.green : '#fff'; } else ctx.stroke();
+    ctx.textAlign = 'center'; ctx.fillText(badge.t, x + w - pad - tw / 2, y + pad + 16 * u + 18 * u * CAP / 2); ctx.textAlign = 'left';
   }
-  // Ergebnis aus Vereinssicht
-  const sc = sd.score ? `${sd.score[0]}:${sd.score[1]}` : /nichtantritt/i.test(m.status) ? 'Nichtantritt' : scoreText(m);
-  const big = !!sd.score;
+  // Ergebnis aus Vereinssicht – Vorschau: Anstoßzeit
+  const sc = pv
+    ? (isCancelled(m) ? 'abgesetzt' : m.time ? `${m.time} UHR` : 'Zeit offen')
+    : sd.score ? `${sd.score[0]}:${sd.score[1]}` : /nichtantritt/i.test(m.status) ? 'Nichtantritt' : scoreText(m);
+  const big = pv ? !!m.time && !isCancelled(m) : !!sd.score;
   ctx.fillStyle = hl ? '#fff' : INK;
   const logo = 36 * u, by = y + h - pad - 6 * u;
   const topEnd = y + pad + 42 * u, botStart = by - 26 * u - 17 * u;
@@ -522,7 +531,10 @@ function drawTile(ctx, scene, m, x, y, w, h, hl) {
   // Gegner
   ctx.fillStyle = hl ? 'rgba(255,255,255,.85)' : '#7a7a7a';
   setFont(ctx, 600, 17 * u, { track: 0.06 });
-  ctx.fillText(`${sd.home ? 'HEIM' : 'AUSWÄRTS'} · ${weekday(m.date).toUpperCase()} ${shortDate(m.date)}`, x + pad + logo + 12 * u, by - 26 * u);
+  const place = pv && !sd.home ? venueShort(m) : ''; // Heimspiel: Badge sagt „HEIM“ – Ort nur auswärts
+  ctx.fillText(ellipsize(ctx, pv
+    ? [`${weekday(m.date).toUpperCase()} ${shortDate(m.date)}`, place.toUpperCase()].filter(Boolean).join(' · ')
+    : `${sd.home ? 'HEIM' : 'AUSWÄRTS'} · ${weekday(m.date).toUpperCase()} ${shortDate(m.date)}`, w - 2 * pad - logo - 12 * u), x + pad + logo + 12 * u, by - 26 * u);
   if (hl) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + pad + logo / 2, by - 14 * u, logo * 0.6, 0, Math.PI * 2); ctx.fill(); }
   drawTeamLogo(ctx, scene, sd.them, x + pad + logo / 2, by - 14 * u, logo);
   setFont(ctx, 600, 22 * u);
@@ -594,8 +606,13 @@ function drawTiles(ctx, scene) {
 // =====================================================================
 // Highlight: ein Spiel groß, mit Überschrift und kurzem Text, optional Foto
 // =====================================================================
-export function defaultHeadline(m) {
+export function defaultHeadline(m, kind = 'results') {
   if (!m) return '';
+  if (kind === 'preview') {
+    if (isCancelled(m)) return 'Abgesetzt';
+    if (m.home.own && m.away.own) return 'Vereinsduell';
+    return m.home.own ? 'Heimspiel!' : 'Auswärtsspiel';
+  }
   const oc = outcome(m);
   return oc === 'win' ? 'Sieg!' : oc === 'draw' ? 'Unentschieden' : oc === 'loss' ? 'Niederlage' : 'Spielbericht';
 }
@@ -644,9 +661,13 @@ function drawHighlight(ctx, scene) {
   setFont(ctx, 600, 28 * s, { track: 0.03 }); ctx.fillStyle = '#fff';
   ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 10 * s;
   const d = parseIso(m.date);
-  const dateStr = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const pv = isPreview(scene);
+  const dateStr = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+    + (pv && m.time ? ` · ${m.time} Uhr` : '');
+  const place = pv ? venueShort(m) : '';
   ctx.fillText(ellipsize(ctx, m.competition || '', cw - 170 * s), x0, top + 20 * s + tagH + 48 * s);
-  ctx.fillText(dateStr, x0, top + 20 * s + tagH + 88 * s);
+  ctx.fillText(ellipsize(ctx, dateStr, cw - 170 * s), x0, top + 20 * s + tagH + 88 * s);
+  if (place) ctx.fillText(ellipsize(ctx, place, cw - 170 * s), x0, top + 20 * s + tagH + 128 * s);
   ctx.restore();
 
   // Blöcke von unten nach oben: Text-Karte, Ergebnis-Panel, Überschrift
@@ -663,7 +684,7 @@ function drawHighlight(ctx, scene) {
   const headH = head ? headSize * 1.2 : 0;
   const gap = 28 * s;
   const total = textH + panelH + headH + (textH ? gap : 0) + (headH ? gap : 0);
-  const minTop = top + 20 * s + tagH + 120 * s;
+  const minTop = top + 20 * s + tagH + (place ? 160 : 120) * s;
   let y = photo ? bottom - total : Math.max(minTop, minTop + (bottom - minTop - total) / 2);
   y = Math.max(minTop, y);
 
@@ -696,10 +717,16 @@ function drawHighlight(ctx, scene) {
     const lines = wrapLines(ctx, t.name, colW, 2);
     lines.forEach((l, i) => ctx.fillText(l, cx, y + 40 * s + logo + 44 * s + i * 30 * s));
   });
-  const sc = scoreText(m), big = /^\d+:\d+$/.test(sc);
+  const sc = centerText(scene, m), big = /^\d+:\d+$/.test(sc);
   ctx.fillStyle = INK; ctx.textAlign = 'center';
-  const ss = fitSize(ctx, sc, 900, (big ? 190 : 100) * s, cw - 2 * colW - 20 * s, { track: 0 });
-  condensed(ctx, sc, x0 + cw / 2, y + panelH / 2 + ss * CAP / 2 - 10 * s, 0.92, 'center');
+  const kick = pv && big; // Anstoßzeit: etwas kleiner, darunter „UHR“
+  const ss = fitSize(ctx, sc, 900, (big ? (kick ? 150 : 190) : 100) * s, cw - 2 * colW - 20 * s, { track: 0 });
+  const cy = y + panelH / 2 + ss * CAP / 2 - (kick ? 30 : 10) * s;
+  condensed(ctx, sc, x0 + cw / 2, cy, 0.92, 'center');
+  if (kick) {
+    setFont(ctx, 700, 34 * s, { track: 0.3 }); ctx.fillStyle = COLORS.green;
+    ctx.fillText('UHR', x0 + cw / 2 + 34 * s * 0.15, cy + 54 * s);
+  }
   ctx.textAlign = 'left';
   y += panelH + gap;
 
@@ -718,7 +745,7 @@ function drawHighlight(ctx, scene) {
 const DRAW = { paper: drawPaper, board: drawBoard, tiles: drawTiles, highlight: drawHighlight };
 
 /**
- * scene = { layout, W, H, story, matches, highlights:Set, title, dateText, footer,
+ * scene = { kind:'results'|'preview', layout, W, H, story, matches, highlights:Set, title, dateText, footer,
  *           images:{ club, logos:Map<id,Image> }, hl:{ match, headline, text, photo, photoY } }
  */
 export function drawResults(ctx, scene) {

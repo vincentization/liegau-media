@@ -16,7 +16,7 @@
 //
 // Bei grundlegenden Änderungen VERSION erhöhen → alte Caches werden gelöscht.
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `svl-media-${VERSION}`;
 
 const CORE = [

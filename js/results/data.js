@@ -10,7 +10,8 @@ const MANUAL_KEY = 'svl.results.manual';   // Match[]
  * Match = {
  *   id, date:'YYYY-MM-DD', time:'HH:MM', ageGroup:'B-Junioren', competition:'1.Kreisliga (A)',
  *   home:{ name, logo, own }, away:{ name, logo, own },   // logo = fussball.de-Logo-ID (data/logos/<id>.png)
- *   score:[h,a] | null, status:'' | 'o.E.' | 'Absetzung' | …, note, url, manual?
+ *   venue:'Kunstrasenplatz, SpA Liegau-Aug. Kunstrasen, Zum Sportplatz 14, 01454 Radeberg',
+ *   score:[h,a] | null, status:'' | 'o.E.' | 'Absetzung' | '22.11.2026 11:00' (neuer Termin) | …, note, url, manual?
  * }
  */
 
@@ -84,6 +85,16 @@ export function nextWeekend(today = new Date()) {
 export function lastDays(n, today = new Date()) {
   return { from: isoDate(addDays(today, -(n - 1))), to: isoDate(today) };
 }
+/** Kommendes Wochenende (Fr–So): Mo–Do das nächste, Fr–So das laufende (ab heute). */
+export function comingWeekend(today = new Date()) {
+  const dow = today.getDay();
+  const sat = addDays(today, dow === 0 ? -1 : 6 - dow);
+  const fri = addDays(sat, -1);
+  return { from: isoDate(fri > today ? fri : today), to: isoDate(addDays(sat, 1)) };
+}
+export function nextDays(n, today = new Date()) {
+  return { from: isoDate(today), to: isoDate(addDays(today, n - 1)) };
+}
 
 export const inRange = (m, { from, to }) => m.date >= from && m.date <= to;
 
@@ -127,6 +138,47 @@ export function isPlayed(m) {
   const s = (m.status || '').trim();
   if (!s || /\d{2}\.\d{2}\.\d{4}/.test(s)) return false;
   return true;
+}
+
+// ---------- Vorschau (kommende Spiele) ----------
+const RESCHEDULED_RE = /(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{1,2}:\d{2}))?/;
+
+/** Neuer Termin, wenn fussball.de das Spiel verlegt hat (Status „22.11.2026 11:00“). */
+export function rescheduled(m) {
+  const r = (m.status || '').match(RESCHEDULED_RE);
+  return r ? { date: `${r[3]}-${r[2]}-${r[1]}`, time: r[4] || '' } : null;
+}
+
+/** Abgesetzt oder ausgefallen. */
+export const isCancelled = m => !m.score && /absetzung|abgesetzt|ausfall/i.test(m.status || '');
+
+/**
+ * Spiele, die noch anstehen (kein Ergebnis, kein o.E./Nichtantritt/Abbruch) – verlegte Spiele
+ * stehen am neuen Termin (movedFrom = alter Termin). Abgesetzte bleiben drin (zum Abwählen).
+ */
+export function upcomingMatches(all) {
+  return all
+    .filter(m => !m.score && !/o\.?\s?E\.?|nichtantritt|abbruch|wertung/i.test(m.status || ''))
+    .map(m => {
+      const r = rescheduled(m);
+      return r ? { ...m, date: r.date, time: r.time || m.time, status: '', movedFrom: m.date } : m;
+    })
+    .sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
+}
+
+/** Text für die Anstoß-Spalte: „10:30“, „abgesetzt“, „offen“. */
+export function kickoffText(m) {
+  if (isCancelled(m)) return scoreText(m);
+  return m.time || 'offen';
+}
+
+/** Spielort kurz: „SpA Liegau-Aug. Kunstrasen, Radeberg“ (Platzart und Straße weg). */
+export function venueShort(m) {
+  const parts = String(m.venue || '').split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length < 3) return parts.join(', ');
+  const city = parts[parts.length - 1].replace(/^\d{5}\s*/, '');
+  const place = parts[1];
+  return place.toLowerCase().includes(city.toLowerCase()) ? place : `${place}, ${city}`;
 }
 
 /** Ausgang aus Vereinssicht: 'win' | 'draw' | 'loss' | null. Nichtantritt zählt als Sieg/Niederlage. */
