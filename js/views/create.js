@@ -59,7 +59,7 @@ function template(st) {
 
   <section class="cr-start" data-when="empty">
     <div class="hero cr-hero">
-      <p class="eyebrow">Beitrag erstellen</p>
+      <p class="eyebrow">Foto/Video posten</p>
       <h1>Foto oder Video in Vereinsoptik</h1>
       <p>Text und Logo drauf, fertig für WhatsApp, Instagram &amp; Facebook.</p>
     </div>

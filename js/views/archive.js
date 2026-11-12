@@ -134,7 +134,7 @@ function renderGrid() {
         <h2>Noch nichts gespeichert</h2>
         <p>Erstelle einen Beitrag oder ein Logo – alles, was du speicherst, landet hier.</p>
         <div class="btn-row">
-          <a class="btn" href="#/create">Beitrag erstellen</a>
+          <a class="btn" href="#/create">Foto/Video posten</a>
           <a class="btn btn-secondary" href="#/logo">Logo bearbeiten</a>
         </div>
       </div>`;

@@ -20,12 +20,12 @@ export function mount(el) {
       <div class="tiles">
         <a class="tile" href="#/create">
           <span class="tile-icon">${ICONS.create}</span>
-          <span><h3>Beitrag erstellen</h3><p>Foto oder Video laden, Text &amp; Logo drauf, für WhatsApp, Instagram &amp; Facebook exportieren.</p></span>
+          <span><h3>Foto/Video posten</h3><p>Foto oder Video laden, Text &amp; Logo drauf, für WhatsApp, Instagram &amp; Facebook exportieren.</p></span>
           <span class="chev">›</span>
         </a>
         <a class="tile" href="#/results">
           <span class="tile-icon">${ICONS.results}</span>
-          <span><h3>Ergebnisse posten</h3><p>Alle Ergebnisse vom Wochenende direkt von fussball.de – als Übersicht oder einzelnes Highlight.</p></span>
+          <span><h3>Ergebnisse &amp; Vorschau</h3><p>Ergebnisse vom Wochenende oder die kommenden Spiele direkt von fussball.de – als Übersicht oder einzelnes Highlight.</p></span>
           <span class="chev">›</span>
         </a>
         <a class="tile" href="#/logo">
