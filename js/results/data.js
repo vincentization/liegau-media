@@ -153,10 +153,10 @@ export function sides(m) {
     : { us: m.home, them: m.away, home: true, score: m.score ? [...m.score] : null };
 }
 
-/** Kurzer Mannschaftsname fürs Bild: „B-Junioren“ → „B-Jugend“? – bewusst nicht; fussball.de-Bezeichnung bleibt. Zusatz „2“/„3“ aus dem Vereinsnamen. */
+/** Mannschaftsbezeichnung fürs Bild: Altersklasse + Zusatz aus dem Vereinsnamen („E-Junioren 2“). */
 export function teamLabel(m) {
   const us = sides(m).us;
-  const suffix = (us.name.match(/\s(\d|I{1,3}|II)$/) || [])[1];
+  const suffix = (us.name.match(/\s(\d+|I{1,3})$/) || [])[1];
   return [m.ageGroup || 'Mannschaft', suffix].filter(Boolean).join(' ');
 }
 

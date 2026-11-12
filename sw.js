@@ -16,7 +16,7 @@
 //
 // Bei grundlegenden Änderungen VERSION erhöhen → alte Caches werden gelöscht.
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `svl-media-${VERSION}`;
 
 const CORE = [
@@ -33,6 +33,10 @@ const CORE = [
   'js/views/logo.js',
   'js/views/create.js',
   'js/views/archive.js',
+  'js/views/results.js',
+  'js/results/data.js',
+  'js/results/render.js',
+  'css/views/results.css',
   'css/views/archive.css',
   'assets/sv-logo.svg',
   'icons/icon.svg',

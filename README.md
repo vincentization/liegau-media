@@ -8,6 +8,7 @@ Kleine Web-App (PWA) für die Social-Media-Arbeit des **SV Liegau-Augustusbad 19
 
 - **Logo** – Hallencup-Logo anpassen und als PNG/SVG exportieren – oder als Video animieren (Varianten „lame“, „mid“, „exciting“; Quadrat oder Story).
 - **Erstellen** – Beiträge im Vereinsdesign für Instagram (Post/Story), WhatsApp-Status und Facebook erzeugen.
+- **Ergebnisse** – Ergebnisse aller Mannschaften für einen Zeitraum (Standard: letztes Wochenende) automatisch von fussball.de als Beitrag: drei Übersichts-Layouts (Klassik, Anzeigetafel, Kacheln) mit hervorgehobenen Spielen, oder ein einzelnes Spiel als **Highlight** mit Überschrift, kurzem Text und optionalem Foto. Ergebnisse lassen sich korrigieren oder manuell ergänzen.
 - **Archiv** – alle gespeicherten Bilder, Videos und Logos ansehen, teilen, herunterladen oder löschen.
 - Funktioniert offline und lässt sich wie eine normale App installieren.
 
@@ -35,6 +36,19 @@ Dann http://localhost:5173 öffnen. Auf `localhost` lädt der Service Worker Dat
 Hinweise:
 - Nur **relative URLs** verwenden (die Seite läuft unter `/liegau-media/`).
 - Neue Dateien werden vom Service Worker automatisch gecacht. Bei grundlegenden Änderungen `VERSION` in `sw.js` erhöhen.
+
+## Spielergebnisse (fussball.de)
+
+fussball.de hat keine offizielle API und erlaubt keine Abrufe direkt aus dem Browser. Deshalb lädt
+[`tools/fetch-results.mjs`](tools/fetch-results.mjs) die Spiele des Vereins (letzte 120 Tage bis +14 Tage)
+**beim Veröffentlichen** im GitHub-Pages-Workflow und legt sie als `data/results.json` samt Vereinslogos
+(`data/logos/`) neben die App. Die auf fussball.de per Schriftart verschleierten Ergebnisse werden dabei entschlüsselt.
+
+- Der Workflow läuft zusätzlich zeitgesteuert: Sa/So alle 2 Stunden, montags stündlich, sonst einmal täglich.
+  Sofort aktualisieren: **Actions → GitHub Pages → Run workflow**. Die App zeigt „Stand fussball.de: …“.
+- Fehlt ein Ergebnis oder ist es falsch, in der App über den Stift korrigieren (bleibt auf dem Gerät gespeichert).
+- Lokal: `node tools/fetch-results.mjs` ausführen (optional mit Zeitraum: `node tools/fetch-results.mjs 2026-08-01 2026-11-30`).
+  `data/` wird nicht eingecheckt.
 
 ## Veröffentlichen (GitHub Pages)
 

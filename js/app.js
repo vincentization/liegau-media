@@ -5,6 +5,7 @@ const routes = {
   home:    { path: '',        load: () => import('./views/home.js') },
   logo:    { path: 'logo',    load: () => import('./views/logo.js') },
   create:  { path: 'create',  load: () => import('./views/create.js') },
+  results: { path: 'results', load: () => import('./views/results.js') },
   archive: { path: 'archive', load: () => import('./views/archive.js') },
 };
 
