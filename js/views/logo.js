@@ -126,7 +126,7 @@ export async function mount(el) {
         </div>
         <p class="logo-hint">Im Logo steht: <strong data-date-preview></strong></p>
         <label class="field"><span>Datum als freier Text (optional)</span><small class="logo-hint-inline">Ersetzt „von/bis“, z. B. für „Januar 2027“.</small>
-          <input type="text" name="dateFree" placeholder="z. B. 16.– 18.01.2026" autocomplete="off" maxlength="40">
+          <input type="text" name="dateFree" placeholder="z. B. 16.–18.01.2026" autocomplete="off" maxlength="40">
         </label>
       </section>
 

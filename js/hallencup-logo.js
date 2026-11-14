@@ -6,7 +6,7 @@
 // also keine Schrift, genau wie das Original.
 //
 //   const res = await loadLogoResources({ variant: 'gruen' });
-//   const svg = buildHallencupSvg({ edition: 26, dateText: '15.– 17.01.2027' }, res);
+//   const svg = buildHallencupSvg({ edition: 26, dateText: '15.–17.01.2027' }, res);
 //
 // Maße/Positionen sind aus den Vorlagen ausgemessen (Titillium Web Bold 58 pt, Laufweite −40
 // im Banner; SemiBold 39 pt entlang der Kurve für das Datum; Bold 29 pt Zusatzzeile).
@@ -17,7 +17,7 @@ export const DEFAULTS = Object.freeze({
   edition: 25,
   title: 'HALLENCUP',
   subtitle: '',
-  dateText: '16.– 18.01.2026',
+  dateText: '16.–18.01.2026',
   stars: true,
   variant: 'gruen', // 'gruen' | 'silber'
 });
@@ -79,8 +79,8 @@ const pad = n => String(n).padStart(2, '0');
 
 /**
  * Turnierdatum im Stil des Originals:
- *   gleicher Monat:  16.– 18.01.2026
- *   anderer Monat:   30.01.– 01.02.2026
+ *   gleicher Monat:  16.–18.01.2026
+ *   anderer Monat:   30.01.–01.02.2026
  *   anderes Jahr:    30.12.2026 – 02.01.2027
  *   ein Tag:         16.01.2026
  * Parameter: 'YYYY-MM-DD' oder Date.
@@ -98,8 +98,8 @@ export function formatDateRange(from, to) {
   if (b.y * 10000 + b.m * 100 + b.d < a.y * 10000 + a.m * 100 + a.d) [a, b] = [b, a];
   const full = x => `${pad(x.d)}.${pad(x.m)}.${x.y}`;
   if (a.y === b.y && a.m === b.m && a.d === b.d) return full(a);
-  if (a.y === b.y && a.m === b.m) return `${pad(a.d)}.– ${full(b)}`;
-  if (a.y === b.y) return `${pad(a.d)}.${pad(a.m)}.– ${full(b)}`;
+  if (a.y === b.y && a.m === b.m) return `${pad(a.d)}.–${full(b)}`;
+  if (a.y === b.y) return `${pad(a.d)}.${pad(a.m)}.–${full(b)}`;
   return `${full(a)} – ${full(b)}`;
 }
 
